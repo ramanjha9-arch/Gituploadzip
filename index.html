@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ZipDeploy — Upload ZIP to GitHub</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --surface2: #1a1a26;
+    --border: #2a2a3e;
+    --accent: #6c63ff;
+    --accent2: #ff6584;
+    --green: #43e97b;
+    --text: #e8e8f0;
+    --muted: #6b6b8a;
+    --radius: 12px;
+  }
+
+- { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+background: var(–bg);
+color: var(–text);
+font-family: ‘Syne’, sans-serif;
+min-height: 100vh;
+display: flex;
+flex-direction: column;
+align-items: center;
+padding: 40px 20px 80px;
+position: relative;
+overflow-x: hidden;
+}
+
+/* Atmospheric background */
+body::before {
+content: ‘’;
+position: fixed;
+top: -200px; left: -200px;
+width: 600px; height: 600px;
+background: radial-gradient(circle, rgba(108,99,255,0.12) 0%, transparent 70%);
+pointer-events: none;
+}
+body::after {
+content: ‘’;
+position: fixed;
+bottom: -150px; right: -100px;
+width: 500px; height: 500px;
+background: radial-gradient(circle, rgba(255,101,132,0.08) 0%, transparent 70%);
+pointer-events: none;
+}
+
+.header {
+text-align: center;
+margin-bottom: 48px;
+animation: fadeUp 0.6s ease both;
+}
+
+.logo {
+display: inline-flex;
+align-items: center;
+gap: 10px;
+margin-bottom: 12px;
+}
+
+.logo-icon {
+width: 40px; height: 40px;
+background: linear-gradient(135deg, var(–accent), var(–accent2));
+border-radius: 10px;
+display: flex; align-items: center; justify-content: center;
+font-size: 20px;
+}
+
+.logo-text {
+font-size: 28px;
+font-weight: 800;
+letter-spacing: -0.5px;
+background: linear-gradient(135deg, #fff 40%, var(–accent));
+-webkit-background-clip: text;
+-webkit-text-fill-color: transparent;
+}
+
+.tagline {
+font-size: 14px;
+color: var(–muted);
+font-weight: 400;
+letter-spacing: 0.5px;
+}
+
+.card {
+background: var(–surface);
+border: 1px solid var(–border);
+border-radius: 18px;
+padding: 32px;
+width: 100%;
+max-width: 620px;
+animation: fadeUp 0.6s ease 0.1s both;
+position: relative;
+}
+
+.card + .card { margin-top: 16px; }
+
+.section-label {
+font-size: 11px;
+font-weight: 700;
+letter-spacing: 2px;
+text-transform: uppercase;
+color: var(–accent);
+margin-bottom: 16px;
+display: flex;
+align-items: center;
+gap: 8px;
+}
+.section-label::after {
+content: ‘’;
+flex: 1;
+height: 1px;
+background: var(–border);
+}
+
+.field-group { display: flex; flex-direction: column; gap: 12px; }
+
+.field {
+display: flex;
+flex-direction: column;
+gap: 6px;
+}
+
+label {
+font-size: 12px;
+color: var(–muted);
+font-weight: 600;
+font-family: ‘DM Mono’, monospace;
+}
+
+input[type=“text”], input[type=“password”], select {
+background: var(–surface2);
+border: 1px solid var(–border);
+border-radius: 8px;
+padding: 10px 14px;
+color: var(–text);
+font-size: 13px;
+font-family: ‘DM Mono’, monospace;
+outline: none;
+transition: border-color 0.2s, box-shadow 0.2s;
+width: 100%;
+}
+
+input[type=“text”]:focus, input[type=“password”]:focus, select:focus {
+border-color: var(–accent);
+box-shadow: 0 0 0 3px rgba(108,99,255,0.15);
+}
+
+input::placeholder { color: var(–muted); }
+
+.row { display: flex; gap: 12px; }
+.row .field { flex: 1; }
+
+/* Drop Zone */
+.drop-zone {
+border: 2px dashed var(–border);
+border-radius: var(–radius);
+padding: 36px 24px;
+text-align: center;
+cursor: pointer;
+transition: all 0.2s;
+position: relative;
+background: var(–surface2);
+}
+
+.drop-zone:hover, .drop-zone.drag-over {
+border-color: var(–accent);
+background: rgba(108,99,255,0.05);
+}
+
+.drop-zone.has-file {
+border-color: var(–green);
+border-style: solid;
+}
+
+.drop-icon {
+font-size: 36px;
+margin-bottom: 10px;
+display: block;
+}
+
+.drop-title {
+font-size: 15px;
+font-weight: 700;
+margin-bottom: 4px;
+}
+
+.drop-sub {
+font-size: 12px;
+color: var(–muted);
+font-family: ‘DM Mono’, monospace;
+}
+
+.drop-zone input[type=“file”] {
+position: absolute;
+inset: 0;
+opacity: 0;
+cursor: pointer;
+width: 100%;
+height: 100%;
+}
+
+.file-info {
+display: none;
+align-items: center;
+gap: 10px;
+margin-top: 12px;
+background: rgba(67,233,123,0.08);
+border: 1px solid rgba(67,233,123,0.2);
+border-radius: 8px;
+padding: 10px 14px;
+}
+.file-info.visible { display: flex; }
+.file-info span { font-size: 13px; font-family: ‘DM Mono’, monospace; color: var(–green); }
+.file-info .fi-name { flex: 1; color: var(–text); }
+
+/* Options */
+.option-row {
+display: flex;
+align-items: center;
+gap: 10px;
+padding: 10px 0;
+border-bottom: 1px solid var(–border);
+}
+.option-row:last-child { border-bottom: none; }
+
+.toggle {
+width: 36px; height: 20px;
+background: var(–border);
+border-radius: 10px;
+position: relative;
+cursor: pointer;
+transition: background 0.2s;
+flex-shrink: 0;
+}
+.toggle.on { background: var(–accent); }
+.toggle::after {
+content: ‘’;
+position: absolute;
+width: 14px; height: 14px;
+background: white;
+border-radius: 50%;
+top: 3px; left: 3px;
+transition: transform 0.2s;
+}
+.toggle.on::after { transform: translateX(16px); }
+
+.option-text { font-size: 13px; }
+.option-sub { font-size: 11px; color: var(–muted); font-family: ‘DM Mono’, monospace; }
+
+/* Upload button */
+.btn-upload {
+width: 100%;
+padding: 16px;
+background: linear-gradient(135deg, var(–accent), #8b7cf8);
+border: none;
+border-radius: var(–radius);
+color: white;
+font-family: ‘Syne’, sans-serif;
+font-size: 15px;
+font-weight: 700;
+cursor: pointer;
+transition: all 0.2s;
+letter-spacing: 0.5px;
+margin-top: 24px;
+position: relative;
+overflow: hidden;
+}
+
+.btn-upload:hover:not(:disabled) {
+transform: translateY(-1px);
+box-shadow: 0 8px 24px rgba(108,99,255,0.35);
+}
+
+.btn-upload:disabled {
+opacity: 0.5;
+cursor: not-allowed;
+}
+
+.btn-upload .btn-inner {
+display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+
+/* Progress */
+.progress-card {
+display: none;
+background: var(–surface);
+border: 1px solid var(–border);
+border-radius: 18px;
+padding: 28px 32px;
+width: 100%;
+max-width: 620px;
+margin-top: 16px;
+animation: fadeUp 0.4s ease both;
+}
+.progress-card.visible { display: block; }
+
+.progress-header {
+display: flex;
+justify-content: space-between;
+align-items: center;
+margin-bottom: 16px;
+}
+
+.progress-title {
+font-size: 14px;
+font-weight: 700;
+}
+
+.progress-count {
+font-size: 12px;
+font-family: ‘DM Mono’, monospace;
+color: var(–muted);
+}
+
+.progress-bar-wrap {
+background: var(–surface2);
+border-radius: 99px;
+height: 6px;
+overflow: hidden;
+margin-bottom: 16px;
+}
+
+.progress-bar-fill {
+height: 100%;
+background: linear-gradient(90deg, var(–accent), var(–accent2));
+border-radius: 99px;
+transition: width 0.3s ease;
+width: 0%;
+}
+
+.log-box {
+background: var(–surface2);
+border: 1px solid var(–border);
+border-radius: 8px;
+padding: 12px;
+max-height: 220px;
+overflow-y: auto;
+font-family: ‘DM Mono’, monospace;
+font-size: 11px;
+line-height: 1.7;
+}
+
+.log-line { display: flex; gap: 8px; align-items: flex-start; }
+.log-icon { flex-shrink: 0; }
+.log-ok { color: var(–green); }
+.log-err { color: var(–accent2); }
+.log-info { color: var(–muted); }
+.log-skip { color: #f5a623; }
+
+/* Result */
+.result-banner {
+display: none;
+align-items: center;
+gap: 12px;
+padding: 16px 20px;
+border-radius: 10px;
+margin-top: 16px;
+font-size: 14px;
+font-weight: 600;
+animation: fadeUp 0.4s ease both;
+}
+.result-banner.success {
+display: flex;
+background: rgba(67,233,123,0.1);
+border: 1px solid rgba(67,233,123,0.3);
+color: var(–green);
+}
+.result-banner.error {
+display: flex;
+background: rgba(255,101,132,0.1);
+border: 1px solid rgba(255,101,132,0.3);
+color: var(–accent2);
+}
+
+.result-link {
+color: var(–accent);
+text-decoration: none;
+font-family: ‘DM Mono’, monospace;
+font-size: 12px;
+border-bottom: 1px solid currentColor;
+}
+
+.hint {
+font-size: 11px;
+color: var(–muted);
+font-family: ‘DM Mono’, monospace;
+margin-top: 6px;
+display: flex;
+align-items: flex-start;
+gap: 4px;
+}
+
+@keyframes fadeUp {
+from { opacity: 0; transform: translateY(16px); }
+to   { opacity: 1; transform: translateY(0); }
+}
+
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(–border); border-radius: 99px; }
+</style>
+
+</head>
+<body>
+
+<div class="header">
+  <div class="logo">
+    <div class="logo-icon">📦</div>
+    <div class="logo-text">ZipDeploy</div>
+  </div>
+  <div class="tagline">Unzip & push any folder structure to GitHub — instantly</div>
+</div>
+
+<!-- GitHub Config -->
+
+<div class="card">
+  <div class="section-label">GitHub Config</div>
+  <div class="field-group">
+    <div class="field">
+      <label>Personal Access Token (PAT)</label>
+      <input type="password" id="ghToken" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx">
+      <div class="hint">⚑ Needs repo scope. <a href="https://github.com/settings/tokens/new" target="_blank" style="color:var(--accent)">Generate one →</a></div>
+    </div>
+    <div class="row">
+      <div class="field">
+        <label>GitHub Username / Org</label>
+        <input type="text" id="ghOwner" placeholder="your-username">
+      </div>
+      <div class="field">
+        <label>Repository Name</label>
+        <input type="text" id="ghRepo" placeholder="my-repo">
+      </div>
+    </div>
+    <div class="row">
+      <div class="field">
+        <label>Target Branch</label>
+        <input type="text" id="ghBranch" value="main" placeholder="main">
+      </div>
+      <div class="field">
+        <label>Upload Path (optional)</label>
+        <input type="text" id="ghPath" placeholder="e.g. src/ or leave blank">
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ZIP Upload -->
+
+<div class="card">
+  <div class="section-label">ZIP File</div>
+  <div class="drop-zone" id="dropZone">
+    <input type="file" id="zipInput" accept=".zip">
+    <span class="drop-icon">🗜️</span>
+    <div class="drop-title">Drop your ZIP here</div>
+    <div class="drop-sub">or click to browse — .zip files only</div>
+  </div>
+  <div class="file-info" id="fileInfo">
+    <span>✓</span>
+    <span class="fi-name" id="fileName">—</span>
+    <span id="fileSize">—</span>
+  </div>
+</div>
+
+<!-- Options -->
+
+<div class="card">
+  <div class="section-label">Options</div>
+
+  <div class="option-row">
+    <div class="toggle on" id="toggleSkipMac" onclick="this.classList.toggle('on')"></div>
+    <div>
+      <div class="option-text">Skip macOS system files</div>
+      <div class="option-sub">Ignores __MACOSX/, .DS_Store, etc.</div>
+    </div>
+  </div>
+
+  <div class="option-row">
+    <div class="toggle" id="toggleStripRoot" onclick="this.classList.toggle('on')"></div>
+    <div>
+      <div class="option-text">Strip root folder</div>
+      <div class="option-sub">If ZIP has a single root folder, upload its contents directly</div>
+    </div>
+  </div>
+
+  <div class="option-row">
+    <div class="toggle on" id="toggleOverwrite" onclick="this.classList.toggle('on')"></div>
+    <div>
+      <div class="option-text">Overwrite existing files</div>
+      <div class="option-sub">Will update files already in the repo</div>
+    </div>
+  </div>
+
+  <div class="field" style="margin-top:16px">
+    <label>Commit Message</label>
+    <input type="text" id="commitMsg" value="Upload via ZipDeploy 📦" placeholder="Your commit message">
+  </div>
+
+  <button class="btn-upload" id="uploadBtn" onclick="startUpload()">
+    <div class="btn-inner">
+      <span>🚀</span> <span>Upload to GitHub</span>
+    </div>
+  </button>
+</div>
+
+<!-- Progress -->
+
+<div class="progress-card" id="progressCard">
+  <div class="progress-header">
+    <div class="progress-title">Uploading files…</div>
+    <div class="progress-count" id="progressCount">0 / 0</div>
+  </div>
+  <div class="progress-bar-wrap">
+    <div class="progress-bar-fill" id="progressBar"></div>
+  </div>
+  <div class="log-box" id="logBox"></div>
+</div>
+
+<!-- Result -->
+
+<div class="result-banner" id="resultBanner"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+
+// --- File drag & drop ---
+const dropZone = $('dropZone');
+const zipInput = $('zipInput');
+let selectedFile = null;
+
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('drag-over');
+  const f = e.dataTransfer.files[0];
+  if (f && f.name.endsWith('.zip')) setFile(f);
+  else alert('Please drop a .zip file.');
+});
+zipInput.addEventListener('change', () => { if (zipInput.files[0]) setFile(zipInput.files[0]); });
+
+function setFile(f) {
+  selectedFile = f;
+  dropZone.classList.add('has-file');
+  $('fileName').textContent = f.name;
+  $('fileSize').textContent = (f.size / 1024).toFixed(1) + ' KB';
+  $('fileInfo').classList.add('visible');
+}
+
+// --- Logging ---
+function log(msg, type = 'info') {
+  const box = $('logBox');
+  const icons = { ok: '✓', err: '✗', info: '·', skip: '⊘' };
+  const div = document.createElement('div');
+  div.className = 'log-line';
+  div.innerHTML = `<span class="log-icon log-${type}">${icons[type]}</span><span class="log-${type}">${msg}</span>`;
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+}
+
+// --- GitHub API helpers ---
+async function ghGet(token, owner, repo, path) {
+  const url = `https://api.github.com/repos/${owner}/${repo}/contents/${encodeURIComponent(path)}`;
+  const r = await fetch(url, { headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' } });
+  if (r.status === 404) return null;
+  if (!r.ok) throw new Error(`GET ${path}: ${r.status}`);
+  return r.json();
+}
+
+async function ghPut(token, owner, repo, path, content64, message, sha) {
+  const body = { message, content: content64, branch: $('ghBranch').value.trim() };
+  if (sha) body.sha = sha;
+  const url = `https://api.github.com/repos/${owner}/${repo}/contents/${encodeURIComponent(path)}`;
+  const r = await fetch(url, {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'application/vnd.github+json' },
+    body: JSON.stringify(body)
+  });
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({}));
+    throw new Error(err.message || r.status);
+  }
+  return r.json();
+}
+
+function arrayBufferToBase64(buffer) {
+  let binary = '';
+  const bytes = new Uint8Array(buffer);
+  for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary);
+}
+
+// --- Main upload ---
+async function startUpload() {
+  const token = $('ghToken').value.trim();
+  const owner = $('ghOwner').value.trim();
+  const repo  = $('ghRepo').value.trim();
+  const msg   = $('commitMsg').value.trim() || 'Upload via ZipDeploy';
+  const basePath = $('ghPath').value.trim().replace(/^\/|\/$/g, '');
+
+  const skipMac  = $('toggleSkipMac').classList.contains('on');
+  const stripRoot = $('toggleStripRoot').classList.contains('on');
+  const overwrite = $('toggleOverwrite').classList.contains('on');
+
+  if (!token || !owner || !repo) { alert('Please fill in Token, Owner and Repo.'); return; }
+  if (!selectedFile) { alert('Please select a ZIP file.'); return; }
+
+  // Reset UI
+  $('progressCard').classList.add('visible');
+  $('logBox').innerHTML = '';
+  $('progressBar').style.width = '0%';
+  $('resultBanner').className = 'result-banner';
+  $('uploadBtn').disabled = true;
+
+  try {
+    log(`Reading ${selectedFile.name}…`, 'info');
+    const zip = await JSZip.loadAsync(selectedFile);
+
+    // Collect files
+    let entries = [];
+    zip.forEach((relPath, zipEntry) => {
+      if (zipEntry.dir) return;
+      if (skipMac && (relPath.startsWith('__MACOSX') || relPath.includes('.DS_Store'))) return;
+      entries.push({ relPath, zipEntry });
+    });
+
+    // Strip root
+    if (stripRoot) {
+      const roots = new Set(entries.map(e => e.relPath.split('/')[0]));
+      if (roots.size === 1) {
+        const rootName = [...roots][0] + '/';
+        entries = entries.map(e => ({ ...e, relPath: e.relPath.slice(rootName.length) })).filter(e => e.relPath);
+        log(`Stripped root folder: ${rootName}`, 'info');
+      }
+    }
+
+    const total = entries.length;
+    log(`Found ${total} file(s) to upload`, 'info');
+    $('progressCount').textContent = `0 / ${total}`;
+
+    let done = 0, errors = 0;
+
+    for (const { relPath, zipEntry } of entries) {
+      const ghPath = basePath ? `${basePath}/${relPath}` : relPath;
+      try {
+        const buf = await zipEntry.async('arraybuffer');
+        const content64 = arrayBufferToBase64(buf);
+
+        let sha = undefined;
+        if (overwrite) {
+          const existing = await ghGet(token, owner, repo, ghPath);
+          if (existing && existing.sha) sha = existing.sha;
+        }
+
+        if (!overwrite && await ghGet(token, owner, repo, ghPath)) {
+          log(`Skipped (exists): ${ghPath}`, 'skip');
+        } else {
+          await ghPut(token, owner, repo, ghPath, content64, msg, sha);
+          log(`Uploaded: ${ghPath}`, 'ok');
+        }
+        done++;
+      } catch (e) {
+        log(`Error: ${ghPath} — ${e.message}`, 'err');
+        errors++;
+        done++;
+      }
+
+      $('progressBar').style.width = `${(done / total) * 100}%`;
+      $('progressCount').textContent = `${done} / ${total}`;
+    }
+
+    const repoUrl = `https://github.com/${owner}/${repo}`;
+    if (errors === 0) {
+      $('resultBanner').className = 'result-banner success';
+      $('resultBanner').innerHTML = `✓ All ${total} files uploaded! &nbsp;<a class="result-link" href="${repoUrl}" target="_blank">View on GitHub →</a>`;
+    } else {
+      $('resultBanner').className = 'result-banner error';
+      $('resultBanner').innerHTML = `⚠ Done with ${errors} error(s). ${total - errors} files uploaded. &nbsp;<a class="result-link" href="${repoUrl}" target="_blank">View on GitHub →</a>`;
+    }
+  } catch (e) {
+    log(`Fatal error: ${e.message}`, 'err');
+    $('resultBanner').className = 'result-banner error';
+    $('resultBanner').textContent = `✗ ${e.message}`;
+  } finally {
+    $('uploadBtn').disabled = false;
+  }
+}
+</script>
+
+</body>
+</html>
